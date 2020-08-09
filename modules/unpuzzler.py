@@ -12,7 +12,31 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+class Puzzle_Solver(nn.Module):
+    def __init__(self, opt):
+        super(Model, self).__init__()
+        self.opt = opt
+        self.stages = {'Trans': "None", 'Feat': opt.FeatureExtraction,
+                       'Seq': opt.SequenceModeling, 'Pred': opt.Prediction}
 
+        self.FeatureExtraction = ResNet_FeatureExtractor(opt.input_channel, opt.output_channel)
+        self.FeatureExtraction_output = opt.output_channel  # int(imgH/16-1) * 512
+        self.AdaptiveAvgPool = nn.AdaptiveAvgPool2d((None, 1))  # Transform final (imgH/16-1) -> 1
+
+        cfg = Config()
+        cfg.dim = opt.output_channel; cfg.dim_c = opt.output_channel              # 降维减少计算量
+        cfg.p_dim = opt.position_dim                        # 一张图片cnn编码之后的特征序列长度
+        cfg.max_vocab_size = opt.batch_max_length + 1                # 一张图片中最多的文字个数, +1 for EOS
+        cfg.len_alphabet = opt.alphabet_size                # 文字的类别个数
+        self.SequenceModeling = Bert_Ocr(cfg)
+
+    def forward(self, input, text, is_train=True):
+        visual_feature = self.FeatureExtraction(input)
+        visual_feature = self.AdaptiveAvgPool(visual_feature.permute(0, 3, 1, 2))  # [b, c, h, w] -> [b, w, c, h]
+        visual_feature = visual_feature.squeeze(3)
+
+        pad_mask = text
+        contextual_feature = self.SequenceModeling(visual_feature, pad_mask)
 
 class Bert_Ocr(nn.Module):
     def __init__(self, cfg):
@@ -136,7 +160,7 @@ class PositionWiseFeedForward(nn.Module):
 
     def forward(self, x):
         # (B, S, D) -> (B, S, D_ff) -> (B, S, D)
-        return self.fc2(gelu(self.fc1(x)))
+        return self.fc2(F.gelu(self.fc1(x)))
 
 class Two_Stage_Decoder(nn.Module):
     def __init__(self, cfg):
