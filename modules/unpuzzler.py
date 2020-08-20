@@ -6,6 +6,7 @@
 import math
 import json
 from typing import NamedTuple
+from modules.feature_extraction import VGG_FeatureExtractor, RCNN_FeatureExtractor, ResNet_FeatureExtractor
 
 import numpy as np
 import torch
@@ -100,20 +101,14 @@ class Block(nn.Module):
         h = self.norm1(x + self.drop(self.proj(h)))
         h = self.norm2(h + self.drop(self.pwff(h)))
         return h
-
-class LayerNorm(nn.Module):
-    "A layernorm module in the TF style (epsilon inside the square root)."
-    def __init__(self, cfg, variance_epsilon=1e-12):
-        super().__init__()
-        self.gamma = nn.Parameter(torch.ones(cfg.dim))
-        self.beta  = nn.Parameter(torch.zeros(cfg.dim))
-        self.variance_epsilon = variance_epsilon
-
-    def forward(self, x):
-        u = x.mean(-1, keepdim=True)
-        s = (x - u).pow(2).mean(-1, keepdim=True)
-        x = (x - u) / torch.sqrt(s + self.variance_epsilon)
-        return self.gamma * x + self.beta
+        
+def split_last(x, shape):
+    "split the last dimension to given shape"
+    shape = list(shape)
+    assert shape.count(-1) <= 1
+    if -1 in shape:
+        shape[shape.index(-1)] = int(x.size(-1) / -np.prod(shape))
+    return x.view(*x.size()[:-1], *shape)
 
 class MultiHeadedSelfAttention(nn.Module):
     """ Multi-Headed Dot Product Attention """
@@ -149,6 +144,19 @@ class MultiHeadedSelfAttention(nn.Module):
         self.scores = scores
         return h
 
+class LayerNorm(nn.Module):
+    "A layernorm module in the TF style (epsilon inside the square root)."
+    def __init__(self, cfg, variance_epsilon=1e-12):
+        super().__init__()
+        self.gamma = nn.Parameter(torch.ones(cfg.dim))
+        self.beta  = nn.Parameter(torch.zeros(cfg.dim))
+        self.variance_epsilon = variance_epsilon
+
+    def forward(self, x):
+        u = x.mean(-1, keepdim=True)
+        s = (x - u).pow(2).mean(-1, keepdim=True)
+        x = (x - u) / torch.sqrt(s + self.variance_epsilon)
+        return self.gamma * x + self.beta
 
 class PositionWiseFeedForward(nn.Module):
     """ FeedForward Neural Networks for each position """
