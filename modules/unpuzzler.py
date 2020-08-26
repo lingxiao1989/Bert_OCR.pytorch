@@ -13,9 +13,27 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+class Config(object):
+    '''参数设置'''
+    """ Relation Attention Module """
+    p_drop_attn = 0.1
+    p_drop_hidden = 0.1
+    dim = 512                       # the encode output feature
+    attention_layers = 2                    # the layers of transformer
+    n_heads = 8
+    dim_ff = 1024 * 2                       # 位置前向传播的隐含层维度
+
+    ''' Parallel Attention Module '''
+    dim_c = dim
+    max_vocab_size = 26             # 一张图片含有字符的最大长度
+
+    """ Two-stage Decoder """
+    len_alphabet = 39               # 字符类别数量
+    decoder_atten_layers = 2
+
 class Puzzle_Solver(nn.Module):
     def __init__(self, opt):
-        super(Model, self).__init__()
+        super(Puzzle_Solver, self).__init__()
         self.opt = opt
         self.stages = {'Trans': "None", 'Feat': opt.FeatureExtraction,
                        'Seq': opt.SequenceModeling, 'Pred': opt.Prediction}
@@ -44,15 +62,16 @@ class Bert_Ocr(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.transformer = Transformer(cfg, cfg.attention_layers)
-        self.attention = Parallel_Attention(cfg)
+        #self.attention = Parallel_Attention(cfg)
 #         self.attention = MultiHeadAttention(d_model=cfg.dim, max_vocab_size=cfg.max_vocab_size)
-        self.decoder = Two_Stage_Decoder(cfg)
+        #self.decoder = Two_Stage_Decoder(cfg)
 
     def forward(self, encoder_feature, mask=None):
         bert_out = self.transformer(encoder_feature, mask)                 # 做一个self_attention//4*200*512
-        glimpses = self.attention(encoder_feature, bert_out, mask)         # 原始序列和目标序列的转化//4*512*94
-        res = self.decoder(glimpses.transpose(1,2))
-        return res
+        #glimpses = self.attention(encoder_feature, bert_out, mask)         # 原始序列和目标序列的转化//4*512*94
+        #self.final = nn.Conv2d(nb_filter[0], num_classes, kernel_size=1)
+        #res = self.decoder(glimpses.transpose(1,2))
+        return bert_out
 
 class Transformer(nn.Module):
     """ Transformer with Self-Attentive Blocks"""
