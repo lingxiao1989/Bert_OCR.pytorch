@@ -109,6 +109,12 @@ def split_last(x, shape):
     if -1 in shape:
         shape[shape.index(-1)] = int(x.size(-1) / -np.prod(shape))
     return x.view(*x.size()[:-1], *shape)
+    
+def merge_last(x, n_dims):
+    "merge the last n_dims to a dimension"
+    s = x.size()
+    assert n_dims > 1 and n_dims < len(s)
+    return x.view(*s[:-n_dims], -1)
 
 class MultiHeadedSelfAttention(nn.Module):
     """ Multi-Headed Dot Product Attention """
@@ -129,8 +135,7 @@ class MultiHeadedSelfAttention(nn.Module):
         """
         # (B, S, D) -proj-> (B, S, D) -split-> (B, S, H, W) -trans-> (B, H, S, W)
         q, k, v = self.proj_q(x), self.proj_k(x), self.proj_v(x)
-        q, k, v = (split_last(x, (self.n_heads, -1)).transpose(1, 2)
-                   for x in [q, k, v])
+        q, k, v = (split_last(x, (self.n_heads, -1)).transpose(1, 2) for x in [q, k, v])
         # (B, H, S, W) @ (B, H, W, S) -> (B, H, S, S) -softmax-> (B, H, S, S)
         scores = q @ k.transpose(-2, -1) / np.sqrt(k.size(-1))
         if mask is not None:
